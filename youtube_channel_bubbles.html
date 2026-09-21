@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#06070b" />
+<title>Channel Bubble Space</title>
+
+<style>
+  :root {
+    --bg: #06070b;
+    --text: #f5f7fb;
+    --muted: rgba(255,255,255,.55);
+    --glass: rgba(255,255,255,.075);
+    --line: rgba(255,255,255,.13);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+                 "SF Pro Display", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+
+  body {
+    position: relative;
+    isolation: isolate;
+  }
+
+  /* Ambient background */
+  .space {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 50% 45%, rgba(124,92,255,.10), transparent 34%),
+      radial-gradient(circle at 15% 15%, rgba(0,200,255,.07), transparent 27%),
+      radial-gradient(circle at 85% 80%, rgba(255,75,160,.055), transparent 30%),
+      #06070b;
+  }
+
+  .space::before {
+    content: "";
+    position: absolute;
+    inset: -20%;
+    opacity: .34;
+    background-image:
+      radial-gradient(circle, rgba(255,255,255,.7) 0 1px, transparent 1.3px);
+    background-size: 92px 92px;
+    mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+    animation: drift 35s linear infinite;
+  }
+
+  .space::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(rgba(255,255,255,.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.015) 1px, transparent 1px);
+    background-size: 70px 70px;
+    mask-image: radial-gradient(circle at center, black, transparent 78%);
+  }
+
+  @keyframes drift {
+    to { transform: translate3d(92px, 92px, 0); }
+  }
+
+  .center-glow {
+    position: fixed;
+    width: min(48vw, 620px);
+    height: min(48vw, 620px);
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.045), transparent 66%);
+    filter: blur(4px);
+    pointer-events: none;
+  }
+
+  #world {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    perspective: 900px;
+    touch-action: none;
+  }
+
+  .bubble {
+    --size: 88px;
+    position: absolute;
+    width: var(--size);
+    height: var(--size);
+    left: 0;
+    top: 0;
+    border-radius: 50%;
+    cursor: grab;
+    transform: translate3d(0,0,0);
+    will-change: transform;
+    touch-action: none;
+    z-index: 5;
+  }
+
+  .bubble:active { cursor: grabbing; }
+
+  .bubble::before {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    background:
+      conic-gradient(from 180deg,
+        rgba(255,255,255,.55),
+        rgba(255,255,255,.03) 18%,
+        rgba(130,160,255,.42) 42%,
+        rgba(255,255,255,.04) 65%,
+        rgba(255,255,255,.38));
+    filter: blur(.2px);
+    opacity: .8;
+    z-index: -1;
+  }
+
+  .bubble::after {
+    content: "";
+    position: absolute;
+    inset: -12px;
+    border-radius: inherit;
+    background: radial-gradient(circle, rgba(125,150,255,.20), transparent 67%);
+    filter: blur(7px);
+    opacity: .7;
+    transition: opacity .25s ease, transform .25s ease;
+    z-index: -2;
+  }
+
+  .bubble:hover::after {
+    opacity: 1;
+    transform: scale(1.16);
+  }
+
+  .bubble-inner {
+    position: absolute;
+    inset: 3px;
+    border-radius: inherit;
+    overflow: hidden;
+    background:
+      linear-gradient(145deg, rgba(255,255,255,.20), rgba(255,255,255,.035) 42%, rgba(0,0,0,.25));
+    border: 1px solid rgba(255,255,255,.20);
+    box-shadow:
+      inset 7px 7px 18px rgba(255,255,255,.08),
+      inset -10px -12px 22px rgba(0,0,0,.30),
+      0 16px 40px rgba(0,0,0,.28);
+    backdrop-filter: blur(8px);
+  }
+
+  .avatar {
+    position: absolute;
+    inset: 8%;
+    width: 84%;
+    height: 84%;
+    object-fit: cover;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #202536, #0d0f18);
+    border: 2px solid rgba(255,255,255,.18);
+    box-shadow: 0 3px 16px rgba(0,0,0,.38);
+  }
+
+  .shine {
+    position: absolute;
+    width: 45%;
+    height: 24%;
+    top: 7%;
+    left: 11%;
+    border-radius: 50%;
+    background: linear-gradient(120deg, rgba(255,255,255,.38), rgba(255,255,255,0));
+    filter: blur(2px);
+    transform: rotate(-25deg);
+    pointer-events: none;
+  }
+
+  .label {
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 11px);
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 150px;
+    padding: 6px 9px;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 999px;
+    background: rgba(7,8,12,.58);
+    color: rgba(255,255,255,.78);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 20px rgba(0,0,0,.18);
+    pointer-events: none;
+  }
+
+  .bubble.spawn {
+    animation: appear .7s cubic-bezier(.2,.8,.2,1) both;
+  }
+
+  @keyframes appear {
+    from { opacity: 0; transform: translate3d(0,0,0) scale(.45); }
+    to { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+  }
+
+  .bubble.explode {
+    pointer-events: none;
+    animation: explode .46s cubic-bezier(.2,.9,.3,1) forwards;
+  }
+
+  @keyframes explode {
+    0%   { opacity: 1; transform: translate3d(0,0,0) scale(1); filter: brightness(1); }
+    35%  { opacity: 1; transform: translate3d(0,0,0) scale(1.35); filter: brightness(1.9); }
+    100% { opacity: 0; transform: translate3d(0,0,0) scale(2.6); filter: brightness(2.8) blur(5px); }
+  }
+
+  .burst {
+    position: fixed;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 20;
+    background: #fff;
+    box-shadow: 0 0 20px 4px rgba(180,195,255,.9);
+    animation: particle .65s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+
+  @keyframes particle {
+    to {
+      transform: translate3d(var(--dx), var(--dy), 0) scale(.05);
+      opacity: 0;
+    }
+  }
+
+  /* Small, intentionally quiet branding. No navigation/buttons. */
+  .signature {
+    position: fixed;
+    left: 22px;
+    bottom: 18px;
+    z-index: 3;
+    color: rgba(255,255,255,.28);
+    font-size: 9px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
+  @media (max-width: 700px) {
+    .signature { display: none; }
+    .label { font-size: 9px; max-width: 118px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .space::before { animation: none; }
+    .bubble.spawn { animation: none; }
+  }
+</style>
+</head>
+
+<body>
+<div class="space">
+  <div class="center-glow"></div>
+  <main id="world" aria-label="YouTube channels"></main>
+  <div class="signature">CHANNEL SPACE</div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const channels = [
+    ["Anil Saini Business Coach", "anilsainibusinesscoach"],
+    ["Anil Saini Fire Academy", "AnilSainiFireAcademy"],
+    ["Pure Veg Satvik Rasoi", "purevegsatvikrasoi06"],
+    ["Dark Queen Edits", "darkqueen_edits"],
+    ["Jivika", "jivika-f2o"],
+    ["Kitchen With Shabnam", "kitchenwithshabnam1"],
+    ["Poonam's Attire", "PoonamsAttire06"],
+    ["Ikram Khan", "ikram.khan862"],
+    ["Shani Nirala Vlogs", "ShaniNiralaVlogs"],
+    ["Upasana's Home Flame", "UpasanasHomeFlame"],
+    ["Morena SAMP", "MorenaSAMP"],
+    ["Antony", "Antony_1802"],
+    ["FARHAT Ki DUNIA", "FARHATKiDUNIA9505"],
+    ["its Rabi Noma", "itsRabiNoma"],
+    ["Dhananjay Explains Official", "DhananjayExplainsOfficial"],
+    ["Aprel Records", "AprelRecords"],
+    ["jellytimi", "jellytimi7264"]
+  ];
+
+  const world = document.getElementById("world");
+  const bubbles = [];
+  let raf = 0;
+  let last = performance.now();
+
+  const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+  const rand = (min, max) => Math.random() * (max - min) + min;
+
+  function initials(name) {
+    const words = name.replace(/[^a-zA-Z0-9 ]/g, " ").trim().split(/\s+/);
+    return (words[0]?.[0] || "Y") + (words[1]?.[0] || "");
+  }
+
+  // unavatar resolves a YouTube handle to the channel avatar.
+  // If a channel/avatar cannot be resolved, the bubble falls back to initials.
+  function avatarURL(handle) {
+    return `https://unavatar.io/youtube/${encodeURIComponent(handle)}?fallback=false`;
+  }
+
+  function createBubble(channel, index) {
+    const [name, handle] = channel;
+    const el = document.createElement("div");
+    el.className = "bubble spawn";
+    el.setAttribute("role", "link");
+    el.setAttribute("aria-label", name);
+    el.dataset.index = index;
+
+    const size = index === 0 ? rand(108, 122) : rand(70, 94);
+    el.style.setProperty("--size", `${size}px`);
+
+    el.innerHTML = `
+      <div class="bubble-inner">
+        <img class="avatar" alt="" src="${avatarURL(handle)}">
+        <div class="shine"></div>
+      </div>
+      <div class="label">${name}</div>
+    `;
+
+    const img = el.querySelector(".avatar");
+    img.addEventListener("error", () => {
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#30384f"/>
+              <stop offset="1" stop-color="#10131e"/>
+            </linearGradient>
+          </defs>
+          <rect width="200" height="200" rx="100" fill="url(#g)"/>
+          <text x="100" y="118" text-anchor="middle"
+                font-family="Arial,sans-serif" font-size="66" font-weight="700"
+                fill="white">${initials(name)}</text>
+        </svg>`;
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    }, { once: true });
+
+    world.appendChild(el);
+
+    const pad = 18;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    // Spread them naturally around the viewport while keeping every bubble visible.
+    const angle = (index / channels.length) * Math.PI * 2 + rand(-.22, .22);
+    const radiusX = Math.max(90, w * rand(.25, .43));
+    const radiusY = Math.max(80, h * rand(.23, .40));
+
+    let x = w / 2 + Math.cos(angle) * radiusX - size / 2;
+    let y = h / 2 + Math.sin(angle) * radiusY - size / 2;
+
+    x = clamp(x, pad, w - size - pad);
+    y = clamp(y, pad, h - size - pad);
+
+    bubbles.push({
+      el, name, handle, size,
+      x, y,
+      vx: rand(-.08, .08),
+      vy: rand(-.08, .08),
+      dragging: false,
+      moved: false,
+      pointerId: null,
+      downX: 0,
+      downY: 0,
+      offsetX: 0,
+      offsetY: 0,
+      phase: rand(0, Math.PI * 2),
+      speed: rand(.00035, .00075)
+    });
+
+    setTimeout(() => el.classList.remove("spawn"), 750 + index * 28);
+  }
+
+  channels.forEach(createBubble);
+
+  function render(b) {
+    b.el.style.transform = `translate3d(${b.x}px, ${b.y}px, 0)`;
+  }
+
+  function keepInBounds(b) {
+    const maxX = window.innerWidth - b.size - 8;
+    const maxY = window.innerHeight - b.size - 8;
+
+    if (b.x < 8) { b.x = 8; b.vx = Math.abs(b.vx) * .8; }
+    if (b.y < 8) { b.y = 8; b.vy = Math.abs(b.vy) * .8; }
+    if (b.x > maxX) { b.x = maxX; b.vx = -Math.abs(b.vx) * .8; }
+    if (b.y > maxY) { b.y = maxY; b.vy = -Math.abs(b.vy) * .8; }
+  }
+
+  // Very light ambient floating. Dragging always takes priority.
+  function animate(now) {
+    const dt = Math.min(32, now - last);
+    last = now;
+
+    for (const b of bubbles) {
+      if (!b.el.isConnected || b.dragging) continue;
+
+      b.phase += b.speed * dt;
+      b.x += Math.cos(b.phase) * .045 * dt;
+      b.y += Math.sin(b.phase * 1.13) * .045 * dt;
+
+      // soft separation so bubbles don't permanently stack
+      for (const o of bubbles) {
+        if (o === b || !o.el.isConnected) continue;
+        const ax = b.x + b.size / 2;
+        const ay = b.y + b.size / 2;
+        const bx = o.x + o.size / 2;
+        const by = o.y + o.size / 2;
+        const dx = ax - bx;
+        const dy = ay - by;
+        const dist = Math.hypot(dx, dy) || 1;
+        const minDist = (b.size + o.size) * .39;
+
+        if (dist < minDist) {
+          const push = (minDist - dist) * .0009 * dt;
+          b.x += (dx / dist) * push * 2;
+          b.y += (dy / dist) * push * 2;
+        }
+      }
+
+      keepInBounds(b);
+      render(b);
+    }
+
+    raf = requestAnimationFrame(animate);
+  }
+  raf = requestAnimationFrame(animate);
+
+  function burst(x, y, count = 18) {
+    for (let i = 0; i < count; i++) {
+      const p = document.createElement("span");
+      p.className = "burst";
+      const angle = Math.random() * Math.PI * 2;
+      const distance = rand(42, 125);
+      p.style.left = `${x - 5}px`;
+      p.style.top = `${y - 5}px`;
+      p.style.setProperty("--dx", `${Math.cos(angle) * distance}px`);
+      p.style.setProperty("--dy", `${Math.sin(angle) * distance}px`);
+      p.style.width = p.style.height = `${rand(3, 8)}px`;
+      world.appendChild(p);
+      p.addEventListener("animationend", () => p.remove(), { once: true });
+    }
+  }
+
+  function openChannel(b) {
+    const url = `https://www.youtube.com/@${b.handle}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function onPointerDown(e) {
+    const el = e.target.closest(".bubble");
+    if (!el) return;
+
+    const b = bubbles[Number(el.dataset.index)];
+    if (!b) return;
+
+    b.dragging = true;
+    b.moved = false;
+    b.pointerId = e.pointerId;
+    b.downX = e.clientX;
+    b.downY = e.clientY;
+    b.offsetX = e.clientX - b.x;
+    b.offsetY = e.clientY - b.y;
+    el.setPointerCapture?.(e.pointerId);
+    el.style.zIndex = 50;
+    e.preventDefault();
+  }
+
+  function onPointerMove(e) {
+    const b = bubbles.find(x => x.pointerId === e.pointerId && x.dragging);
+    if (!b) return;
+
+    const dx = e.clientX - b.downX;
+    const dy = e.clientY - b.downY;
+    if (Math.hypot(dx, dy) > 7) b.moved = true;
+
+    b.x = e.clientX - b.offsetX;
+    b.y = e.clientY - b.offsetY;
+    keepInBounds(b);
+    render(b);
+    e.preventDefault();
+  }
+
+  function onPointerUp(e) {
+    const b = bubbles.find(x => x.pointerId === e.pointerId && x.dragging);
+    if (!b) return;
+
+    b.dragging = false;
+    b.pointerId = null;
+    b.el.style.zIndex = 5;
+
+    if (!b.moved) {
+      const rect = b.el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      burst(cx, cy, 20);
+      b.el.classList.add("explode");
+
+      setTimeout(() => openChannel(b), 185);
+      setTimeout(() => {
+        // Return the bubble if the user comes back to the page.
+        b.el.classList.remove("explode");
+        b.el.style.opacity = "1";
+        b.x = clamp(b.x, 8, window.innerWidth - b.size - 8);
+        b.y = clamp(b.y, 8, window.innerHeight - b.size - 8);
+        render(b);
+      }, 900);
+    }
+  }
+
+  world.addEventListener("pointerdown", onPointerDown);
+  world.addEventListener("pointermove", onPointerMove);
+  world.addEventListener("pointerup", onPointerUp);
+  world.addEventListener("pointercancel", onPointerUp);
+
+  window.addEventListener("resize", () => {
+    for (const b of bubbles) {
+      b.x = clamp(b.x, 8, window.innerWidth - b.size - 8);
+      b.y = clamp(b.y, 8, window.innerHeight - b.size - 8);
+      render(b);
+    }
+  });
+})();
+</script>
+</body>
+</html>
