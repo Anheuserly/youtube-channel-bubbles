@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Channel = {
@@ -14,7 +15,23 @@ type Bubble = Channel & {
   size: number;
   vx: number;
   vy: number;
+  phase: number;
+  speed: number;
 };
+
+type Burst = {
+  id: number;
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  size: number;
+};
+
+const EDGE_PADDING = 8;
+const MOVE_SPEED = 0.075;
+const FLOAT_SPEED = 0.035;
+const SEPARATION_STRENGTH = 0.0011;
 
 const CHANNELS: Channel[] = [
   { name: "Anil Saini Business Coach", handle: "anilsainibusinesscoach" },
@@ -51,6 +68,14 @@ function getInitials(name: string) {
     .filter(Boolean);
 
   return `${words[0]?.[0] ?? "Y"}${words[1]?.[0] ?? ""}`.toUpperCase();
+}
+
+function randomBetween(min: number, max: number) {
+  return Math.random() * (max - min) + min;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function createBubbles(): Bubble[] {
@@ -94,18 +119,23 @@ function createBubbles(): Bubble[] {
       x,
       y,
       size,
-      vx: (Math.random() - 0.5) * 0.06,
-      vy: (Math.random() - 0.5) * 0.06,
+      vx: randomBetween(-MOVE_SPEED, MOVE_SPEED),
+      vy: randomBetween(-MOVE_SPEED, MOVE_SPEED),
+      phase: Math.random() * Math.PI * 2,
+      speed: randomBetween(0.00035, 0.00075),
     };
   });
 }
 
 export default function ChannelBubbleSpace() {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
+  const [bursts, setBursts] = useState<Burst[]>([]);
   const [ready, setReady] = useState(false);
   const [explodingId, setExplodingId] = useState<number | null>(null);
 
   const animationRef = useRef<number | null>(null);
+  const burstIdRef = useRef(0);
+  const reducedMotionRef = useRef(false);
 
   const draggingRef = useRef<{
     id: number;
@@ -118,6 +148,9 @@ export default function ChannelBubbleSpace() {
   } | null>(null);
 
   useEffect(() => {
+    reducedMotionRef.current = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
     setBubbles(createBubbles());
     setReady(true);
   }, []);
@@ -128,8 +161,16 @@ export default function ChannelBubbleSpace() {
 
     return {
       ...bubble,
-      x: Math.max(8, Math.min(width - bubble.size - 8, bubble.x)),
-      y: Math.max(8, Math.min(height - bubble.size - 8, bubble.y)),
+      x: clamp(
+        bubble.x,
+        EDGE_PADDING,
+        Math.max(EDGE_PADDING, width - bubble.size - EDGE_PADDING)
+      ),
+      y: clamp(
+        bubble.y,
+        EDGE_PADDING,
+        Math.max(EDGE_PADDING, height - bubble.size - EDGE_PADDING)
+      ),
     };
   }, []);
 
@@ -142,35 +183,75 @@ export default function ChannelBubbleSpace() {
       const delta = Math.min(time - previous, 32);
       previous = time;
 
-      setBubbles((current) =>
-        current.map((bubble) => {
-          if (draggingRef.current?.id === bubble.id) {
-            return bubble;
+      setBubbles((current) => {
+        if (reducedMotionRef.current) return current;
+
+        const nextBubbles = [...current];
+
+        for (let i = 0; i < nextBubbles.length; i++) {
+          const bubble = nextBubbles[i];
+          if (draggingRef.current?.id === bubble.id) continue;
+
+          const wave = time * bubble.speed;
+          let nextX =
+            bubble.x +
+            Math.cos(bubble.phase + wave) * FLOAT_SPEED * delta;
+          let nextY =
+            bubble.y +
+            Math.sin(bubble.phase * 1.13 + wave) * FLOAT_SPEED * delta;
+
+          nextX += bubble.vx * delta;
+          nextY += bubble.vy * delta;
+
+          for (let j = 0; j < nextBubbles.length; j++) {
+            if (i === j) continue;
+            const other = nextBubbles[j];
+            const dx =
+              nextX + bubble.size / 2 - (other.x + other.size / 2);
+            const dy =
+              nextY + bubble.size / 2 - (other.y + other.size / 2);
+            const dist = Math.hypot(dx, dy) || 1;
+            const minDist = (bubble.size + other.size) * 0.45;
+
+            if (dist < minDist) {
+              const push = (minDist - dist) * SEPARATION_STRENGTH * delta;
+              nextX += (dx / dist) * push * 2;
+              nextY += (dy / dist) * push * 2;
+            }
           }
 
-          const next = {
+          let vx = bubble.vx;
+          let vy = bubble.vy;
+          const maxX = Math.max(
+            EDGE_PADDING,
+            window.innerWidth - bubble.size - EDGE_PADDING
+          );
+          const maxY = Math.max(
+            EDGE_PADDING,
+            window.innerHeight - bubble.size - EDGE_PADDING
+          );
+
+          if (nextX <= EDGE_PADDING || nextX >= maxX) {
+            vx *= -1;
+            nextX = clamp(nextX, EDGE_PADDING, maxX);
+          }
+
+          if (nextY <= EDGE_PADDING || nextY >= maxY) {
+            vy *= -1;
+            nextY = clamp(nextY, EDGE_PADDING, maxY);
+          }
+
+          nextBubbles[i] = {
             ...bubble,
-            x: bubble.x + bubble.vx * delta,
-            y: bubble.y + bubble.vy * delta,
+            x: nextX,
+            y: nextY,
+            vx,
+            vy,
           };
+        }
 
-          if (
-            next.x <= 8 ||
-            next.x >= window.innerWidth - next.size - 8
-          ) {
-            next.vx *= -1;
-          }
-
-          if (
-            next.y <= 8 ||
-            next.y >= window.innerHeight - next.size - 8
-          ) {
-            next.vy *= -1;
-          }
-
-          return keepInside(next);
-        })
-      );
+        return nextBubbles.map(keepInside);
+      });
 
       animationRef.current = requestAnimationFrame(animate);
     };
@@ -183,6 +264,32 @@ export default function ChannelBubbleSpace() {
       }
     };
   }, [ready, keepInside]);
+
+  const createBurst = useCallback((x: number, y: number) => {
+    const nextBursts = Array.from({ length: 18 }, () => {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = randomBetween(42, 125);
+
+      return {
+        id: burstIdRef.current++,
+        x,
+        y,
+        dx: Math.cos(angle) * distance,
+        dy: Math.sin(angle) * distance,
+        size: randomBetween(3, 8),
+      };
+    });
+
+    setBursts((current) => [...current, ...nextBursts]);
+
+    window.setTimeout(() => {
+      setBursts((current) =>
+        current.filter(
+          (burst) => !nextBursts.some((nextBurst) => nextBurst.id === burst.id)
+        )
+      );
+    }, 700);
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -256,6 +363,8 @@ export default function ChannelBubbleSpace() {
 
     if (drag.moved) return;
 
+    const rect = event.currentTarget.getBoundingClientRect();
+    createBurst(rect.left + rect.width / 2, rect.top + rect.height / 2);
     setExplodingId(bubble.id);
 
     window.setTimeout(() => {
@@ -353,6 +462,23 @@ export default function ChannelBubbleSpace() {
           </div>
         ))}
       </div>
+
+      {bursts.map((burst) => (
+        <span
+          key={burst.id}
+          className="bubble-burst"
+          style={
+            {
+              left: burst.x,
+              top: burst.y,
+              width: burst.size,
+              height: burst.size,
+              "--burst-x": `${burst.dx}px`,
+              "--burst-y": `${burst.dy}px`,
+            } as CSSProperties
+          }
+        />
+      ))}
 
       <div className="space-mark">CHANNEL SPACE</div>
     </main>
